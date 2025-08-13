@@ -37,6 +37,28 @@ try {
             $categoryClass = new Category($db);
             $result = $categoryClass->toggleStatus($id);
             break;
+        
+        case 'customer':
+            $customerClass = new Customer($db);
+            $result = $customerClass->toggleStatus($id);
+            break;
+
+        case 'coupon':
+            $couponClass = new Coupon($db);
+            $result = $couponClass->toggleStatus($id);
+            break;
+
+        case 'review':
+            $reviewClass = new Review($db);
+            $updateResult = $reviewClass->updateStatus($id, $status);
+            $result = $updateResult['success'];
+            break;
+
+        case 'feedback':
+            $feedbackClass = new Feedback($db);
+            $updateResult = $feedbackClass->updateStatus($id, $status);
+            $result = $updateResult['success'];
+            break;
             
         default:
             echo json_encode(['success' => false, 'message' => 'Invalid type']);

@@ -21,6 +21,8 @@ class Database {
             ];
             
             $this->pdo = new PDO($dsn, $this->username, $this->password, $options);
+            // Ensure consistent connection collation
+            $this->pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
         } catch (PDOException $e) {
             throw new Exception("Database connection failed: " . $e->getMessage());
         }

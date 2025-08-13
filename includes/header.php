@@ -154,6 +154,34 @@
                             <p>Inventory</p>
                         </a>
                     </li>
+
+                    <li class="nav-item">
+                        <a href="customers.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'customers.php' ? 'active' : ''; ?>">
+                            <i class="nav-icon fas fa-user-friends"></i>
+                            <p>Customers</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a href="feedback.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'feedback.php' ? 'active' : ''; ?>">
+                            <i class="nav-icon fas fa-comment-dots"></i>
+                            <p>Feedback</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a href="reviews.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'reviews.php' ? 'active' : ''; ?>">
+                            <i class="nav-icon fas fa-star"></i>
+                            <p>Reviews</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a href="coupons.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'coupons.php' ? 'active' : ''; ?>">
+                            <i class="nav-icon fas fa-ticket-alt"></i>
+                            <p>Coupons</p>
+                        </a>
+                    </li>
                     
                     <?php if (hasRole('admin')): ?>
                     <li class="nav-item">

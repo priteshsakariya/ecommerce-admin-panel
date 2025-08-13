@@ -25,6 +25,11 @@ require_once __DIR__ . '/../classes/Product.php';
 require_once __DIR__ . '/../classes/Category.php';
 require_once __DIR__ . '/../classes/Order.php';
 require_once __DIR__ . '/../classes/User.php';
+require_once __DIR__ . '/../classes/Customer.php';
+require_once __DIR__ . '/../classes/Feedback.php';
+require_once __DIR__ . '/../classes/Review.php';
+require_once __DIR__ . '/../classes/Coupon.php';
+require_once __DIR__ . '/../classes/Settings.php';
 
 // Initialize database connection
 try {
