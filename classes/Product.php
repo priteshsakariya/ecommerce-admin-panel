@@ -16,8 +16,12 @@ class Product {
      */
     public function getAllProducts($limit = null, $offset = 0) {
         $sql = "SELECT p.*, c.name as category_name, 
-                       COUNT(pi.id) as image_count,
-                       COUNT(pv.id) as variant_count
+                       COUNT(DISTINCT pi.id) as image_count,
+                       COUNT(DISTINCT pv.id) as variant_count,
+                       COALESCE(
+                           MAX(CASE WHEN pi.is_primary = 1 THEN pi.image_url END),
+                           MIN(pi.image_url)
+                       ) AS primary_image
                 FROM products p 
                 LEFT JOIN categories c ON p.category_id = c.id 
                 LEFT JOIN product_images pi ON p.id = pi.product_id
@@ -128,13 +132,24 @@ class Product {
      * Add product images
      */
     public function addProductImages($productId, $images) {
+        // Check if a primary image already exists
+        $stmtCheck = $this->db->prepare("SELECT COUNT(*) FROM product_images WHERE product_id = ? AND is_primary = 1");
+        $stmtCheck->execute([$productId]);
+        $hasPrimary = (int)$stmtCheck->fetchColumn() > 0;
+
         foreach ($images as $index => $image) {
+            $isPrimary = 0;
+            if (!$hasPrimary && $index === 0) {
+                $isPrimary = 1;
+                $hasPrimary = true;
+            }
+
             $stmt = $this->db->prepare("INSERT INTO product_images (product_id, image_url, alt_text, is_primary, sort_order) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([
                 $productId,
                 $image['url'],
                 $image['alt_text'] ?? '',
-                $index === 0 ? 1 : 0,
+                $isPrimary,
                 $index
             ]);
         }
@@ -147,6 +162,58 @@ class Product {
         $stmt = $this->db->prepare("SELECT * FROM product_variants WHERE product_id = ? ORDER BY variant_name, variant_value");
         $stmt->execute([$productId]);
         return $stmt->fetchAll();
+    }
+
+    /**
+     * Delete product images by their IDs and remove files from storage if local
+     */
+    public function deleteProductImages($imageIds) {
+        if (empty($imageIds)) {
+            return ['success' => true];
+        }
+
+        // Fetch image URLs before deletion
+        $placeholders = implode(',', array_fill(0, count($imageIds), '?'));
+        $stmt = $this->db->prepare("SELECT id, image_url FROM product_images WHERE id IN ($placeholders)");
+        $stmt->execute($imageIds);
+        $images = $stmt->fetchAll();
+
+        // Delete DB rows
+        $stmtDel = $this->db->prepare("DELETE FROM product_images WHERE id IN ($placeholders)");
+        $ok = $stmtDel->execute($imageIds);
+
+        // Attempt to unlink files stored locally under UPLOAD_PATH
+        if ($ok) {
+            foreach ($images as $img) {
+                $path = $img['image_url'] ?? '';
+                if ($path && strpos($path, UPLOAD_PATH) === 0 && file_exists($path)) {
+                    @unlink($path);
+                }
+            }
+        }
+
+        return ['success' => $ok];
+    }
+
+    /**
+     * Set a specific image as the primary for a given product
+     */
+    public function setPrimaryImage($productId, $imageId) {
+        try {
+            $this->db->getConnection()->beginTransaction();
+
+            $stmtClear = $this->db->prepare("UPDATE product_images SET is_primary = 0 WHERE product_id = ?");
+            $stmtClear->execute([$productId]);
+
+            $stmtSet = $this->db->prepare("UPDATE product_images SET is_primary = 1 WHERE id = ? AND product_id = ?");
+            $ok = $stmtSet->execute([$imageId, $productId]);
+
+            $this->db->getConnection()->commit();
+            return ['success' => $ok];
+        } catch (Exception $e) {
+            $this->db->getConnection()->rollback();
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**

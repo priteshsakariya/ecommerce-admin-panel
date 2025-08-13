@@ -133,6 +133,30 @@ function updateStock(variantId, quantity) {
     });
 }
 
+// Set primary image for a product
+function setPrimaryImage(productId, imageId) {
+    $.ajax({
+        url: 'ajax/set_primary_image.php',
+        method: 'POST',
+        data: {
+            product_id: productId,
+            image_id: imageId,
+            _token: '<?php echo generateCSRFToken(); ?>'
+        },
+        success: function(response) {
+            const data = typeof response === 'string' ? JSON.parse(response) : response;
+            if (data.success) {
+                location.reload();
+            } else {
+                showAlert('Error setting primary image: ' + data.message, 'danger');
+            }
+        },
+        error: function() {
+            showAlert('Network error occurred', 'danger');
+        }
+    });
+}
+
 // Show alert function
 function showAlert(message, type) {
     const alertHtml = `

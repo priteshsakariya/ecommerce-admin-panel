@@ -76,3 +76,8 @@ function formatPrice($price) {
 function formatDate($date) {
     return date('M j, Y g:i A', strtotime($date));
 }
+
+function formatPriceINR($amount) {
+    // Basic INR formatting (₹ and two decimals)
+    return '₹' . number_format((float)$amount, 2);
+}
