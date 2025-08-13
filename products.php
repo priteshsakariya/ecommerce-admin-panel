@@ -17,7 +17,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         switch ($action) {
             case 'create':
-                $result = $productClass->createProduct($_POST);
+                // Handle uploads
+                $uploadedImages = handleProductImageUploads($_FILES['images'] ?? null);
+                if (!empty($uploadedImages['error'])) {
+                    $message = '<div class="alert alert-danger">' . htmlspecialchars($uploadedImages['error']) . '</div>';
+                    break;
+                }
+
+                $payload = $_POST;
+                $payload['images'] = $uploadedImages['images'] ?? [];
+                $result = $productClass->createProduct($payload);
                 $message = $result['success'] 
                     ? '<div class="alert alert-success">Product created successfully</div>'
                     : '<div class="alert alert-danger">Error: ' . $result['message'] . '</div>';
@@ -28,7 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
 
             case 'edit':
-                $result = $productClass->updateProduct($productId, $_POST);
+                // Optional: delete selected existing images
+                if (!empty($_POST['delete_image_ids']) && is_array($_POST['delete_image_ids'])) {
+                    $ids = array_map('intval', $_POST['delete_image_ids']);
+                    $productClass->deleteProductImages($ids);
+                }
+
+                // Optional: new uploads
+                $uploadedImages = handleProductImageUploads($_FILES['images'] ?? null);
+                $payload = $_POST;
+                if (empty($uploadedImages['error']) && !empty($uploadedImages['images'])) {
+                    $productClass->addProductImages($productId, $uploadedImages['images']);
+                }
+                $result = $productClass->updateProduct($productId, $payload);
                 $message = $result['success'] 
                     ? '<div class="alert alert-success">Product updated successfully</div>'
                     : '<div class="alert alert-danger">Error: ' . $result['message'] . '</div>';
@@ -105,10 +126,11 @@ include 'includes/header.php';
                         <table class="table table-striped table-hover">
                             <thead>
                                 <tr>
+                                    <th>Image</th>
                                     <th>ID</th>
                                     <th>Name</th>
                                     <th>Category</th>
-                                    <th>Base Price</th>
+                                    <th>Base Price (INR)</th>
                                     <th>Images</th>
                                     <th>Variants</th>
                                     <th>Status</th>
@@ -119,6 +141,13 @@ include 'includes/header.php';
                             <tbody>
                                 <?php foreach ($products as $product): ?>
                                     <tr>
+                                        <td>
+                                            <?php if (!empty($product['primary_image'])): ?>
+                                                <img src="<?php echo htmlspecialchars($product['primary_image']); ?>" alt="thumb" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px;">
+                                            <?php else: ?>
+                                                <div class="bg-light d-flex align-items-center justify-content-center" style="width: 48px; height: 48px; border-radius: 6px;"><i class="fas fa-image text-muted"></i></div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?php echo $product['id']; ?></td>
                                         <td>
                                             <strong><?php echo htmlspecialchars($product['name']); ?></strong>
@@ -127,7 +156,7 @@ include 'includes/header.php';
                                             <?php endif; ?>
                                         </td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
-                                        <td><?php echo formatPrice($product['base_price']); ?></td>
+                                        <td><?php echo formatPriceINR($product['base_price']); ?></td>
                                         <td>
                                             <span class="badge badge-info"><?php echo $product['image_count']; ?></span>
                                         </td>
@@ -173,7 +202,7 @@ include 'includes/header.php';
                     </h3>
                 </div>
                 <div class="card-body">
-                    <form method="POST" class="needs-validation" novalidate>
+                    <form method="POST" class="needs-validation" enctype="multipart/form-data" novalidate>
                         <input type="hidden" name="_token" value="<?php echo generateCSRFToken(); ?>">
                         
                         <div class="row">
@@ -196,6 +225,43 @@ include 'includes/header.php';
                                            value="<?php echo htmlspecialchars($product['source_link'] ?? ''); ?>" 
                                            placeholder="https://example.com">
                                 </div>
+
+                                <!-- Images upload -->
+                                <div class="form-group">
+                                    <label for="images">Product Images</label>
+                                    <input type="file" id="images" name="images[]" class="form-control" accept="image/*" multiple>
+                                    <small class="form-text text-muted">You can select multiple images. JPG, PNG up to 2MB each.</small>
+                                </div>
+                                
+                                <?php if ($action === 'edit' && !empty($product['images'])): ?>
+                                    <div class="mt-3">
+                                        <label>Existing Images</label>
+                                        <div class="row">
+                                            <?php foreach ($product['images'] as $img): ?>
+                                                <div class="col-md-3 mb-3">
+                                                    <div class="card">
+                                                        <img src="<?php echo htmlspecialchars($img['image_url']); ?>" class="card-img-top" style="height: 150px; object-fit: cover;" alt="<?php echo htmlspecialchars($img['alt_text'] ?? ''); ?>">
+                                                        <div class="card-body p-2">
+                                                            <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="form-check mb-0">
+                                                                    <input class="form-check-input" type="checkbox" name="delete_image_ids[]" value="<?php echo $img['id']; ?>" id="del-<?php echo $img['id']; ?>">
+                                                                    <label class="form-check-label" for="del-<?php echo $img['id']; ?>">Delete</label>
+                                                                </div>
+                                                                <div>
+                                                                    <?php if ((int)$img['is_primary'] === 1): ?>
+                                                                        <span class="badge badge-success">Primary</span>
+                                                                    <?php else: ?>
+                                                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="setPrimaryImage(<?php echo (int)$product['id']; ?>, <?php echo (int)$img['id']; ?>)">Make Primary</button>
+                                                                    <?php endif; ?>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
                             </div>
 
                             <div class="col-md-4">
@@ -203,7 +269,7 @@ include 'includes/header.php';
                                     <label for="base_price">Base Price *</label>
                                     <div class="input-group">
                                         <div class="input-group-prepend">
-                                            <span class="input-group-text">$</span>
+                                            <span class="input-group-text">₹</span>
                                         </div>
                                         <input type="number" step="0.01" class="form-control" id="base_price" name="base_price" 
                                                value="<?php echo $product['base_price'] ?? ''; ?>" required>
@@ -362,3 +428,65 @@ include 'includes/header.php';
 </section>
 
 <?php include 'includes/footer.php'; ?>
+
+<?php
+// Helpers
+function ensureUploadsDir() {
+    if (!is_dir(UPLOAD_PATH)) {
+        @mkdir(UPLOAD_PATH, 0775, true);
+    }
+}
+
+function sanitizeFilename($filename) {
+    $filename = preg_replace('/[^A-Za-z0-9_\-.]/', '_', $filename);
+    return $filename;
+}
+
+function handleProductImageUploads($files) {
+    if (empty($files) || empty($files['name'])) {
+        return ['images' => []];
+    }
+
+    ensureUploadsDir();
+
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    $maxSize = 2 * 1024 * 1024; // 2MB
+    $images = [];
+
+    $names = (array)$files['name'];
+    $types = (array)$files['type'];
+    $tmpNames = (array)$files['tmp_name'];
+    $sizes = (array)$files['size'];
+    $errors = (array)$files['error'];
+
+    foreach ($names as $idx => $name) {
+        if ($errors[$idx] !== UPLOAD_ERR_OK) {
+            continue;
+        }
+        $type = $types[$idx] ?? '';
+        if (!isset($allowed[$type])) {
+            return ['error' => 'Unsupported file type. Use JPG, PNG, or WEBP.'];
+        }
+        if (($sizes[$idx] ?? 0) > $maxSize) {
+            return ['error' => 'File too large. Max 2MB per image.'];
+        }
+
+        $ext = $allowed[$type];
+        $safeName = pathinfo($name, PATHINFO_FILENAME);
+        $safeName = sanitizeFilename($safeName);
+        $finalName = $safeName . '-' . time() . '-' . mt_rand(1000,9999) . '.' . $ext;
+        $dest = rtrim(UPLOAD_PATH, '/').'/'.$finalName;
+
+        if (!move_uploaded_file($tmpNames[$idx], $dest)) {
+            return ['error' => 'Failed to upload image.'];
+        }
+
+        $images[] = [
+            'url' => $dest,
+            'alt_text' => $safeName,
+        ];
+    }
+
+    return ['images' => $images];
+}
+?>
